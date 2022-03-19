@@ -1,6 +1,5 @@
 __config() -> {
     'stay_loaded'->true,
-    'scope'->'global',
     'commands'->{
         'wand'->['wand'],
         'paste <Block> <replace>'->['paste'],
@@ -9,14 +8,8 @@ __config() -> {
         'undo'->['undo']
     },
     'arguments'->{
-        'Block'->{'type'->'term', 'suggest'->[
-			'white_concrete','yellow_concrete','orange_concrete','purple_concrete',
-			'lime_concrete','red_concrete','green_concrete','magenta_concrete',
-			'brown_concrete','gray_concrete','light_gray_concrete','blue_concrete',
-			'light_blue_concrete','pink_concrete','cyan_concrete','black_concrete'
-			]
-		},
-        'replace'->{'type'->'term','suggest'->['air','water','lava']}
+        'Block'->{'type'->'block'},
+        'replace'->{'type'->'block'}
     }
 };
 
@@ -41,16 +34,17 @@ __on_player_breaks_block(player, block)->( //starts a new spline
     item_tuple = query(player,'holds',hand='mainhand'):0;
     if(item_tuple==global_tool,
         schedule(0, _(outer(block)) -> set(pos(block), block));
-        _draw_surf(1);
+        global_draw_surf=false;
         global_points=[];
         global_points+=pos(block);
         global_sets:(length(global_sets))=global_points;
         _normalise_set();
-        _draw_surf(10000)
+        global_draw_surf=true;
+        _draw_surf_tick()
     );
     if(item_tuple!=global_tool,
         if(global_sets!=[],
-            _draw_surf(1);
+            global_draw=false;
             print('operation cancelled');
             global_sets=[];
             global_cset=[];
@@ -60,17 +54,18 @@ __on_player_breaks_block(player, block)->( //starts a new spline
 );
 
 __on_player_right_clicks_block(player, item_tuple, hand, block, face, hitvec)->( //expands the spline adding new points
-    if((get(item_tuple,0)==global_tool)&&(hand=='mainhand')&&(global_points!=[]),
-        _draw_surf(1);
+    if((item_tuple:0==global_tool)&&(hand=='mainhand')&&(global_points!=[]),
+        global_draw_surf=false;
         global_points+=pos(block);
         delete(global_sets,-1);
         global_sets:(length(global_sets))=global_points;
         _normalise_set();
-        _draw_surf(10000)
+        global_draw_surf=true;
+        _draw_surf_tick()
     );
     if(((get(item_tuple,0)!=global_tool)&&(hand=='mainhand')),
         if(global_sets!=[],
-            _draw_surf(1);
+            global_draw=false;
             print('operation cancelled');
             global_sets=[];
             global_cset=[];
@@ -209,7 +204,7 @@ _draw_spline(points,number_of_tick)->( //a function used to render a spline give
         p1=points:0;
         draw_shape('sphere',number_of_tick,{'center'->p1+0.5,'radius'->1})
     );
-    if(length(points)==2, //in case the spline has only 2 points (a rect line)
+    if(length(points)==2, //in case the spline has only 2 points (a straight line)
         p1=points:0;
         p2=points:1;
         draw_shape('line',number_of_tick,{'from'->p1+0.5,'to'->p2+0.5})
@@ -253,6 +248,11 @@ _draw_surf(number_of_tick)->( //function used to render the surface created
             _draw_spline(points,number_of_tick);
         )
     )
+);
+
+_draw_surf_tick() -> (
+    _draw_surf(12);
+    if(global_draw_surf, schedule(10, '_draw_surf_tick') )
 );
 
 _set_block(pos)->( //function for setting block and storing their preavious value in global_affected_block
@@ -315,7 +315,6 @@ paste(Block,replace)->(
     n=length(global_cset:0);
     if((n>1)&&(m>1),
         c_for(i=0,i<n-1,i=i+1,
-            game_tick(10);
             c_for(j=0,j<m-1,j=j+1,
                 _paste_patch(
                     global_cset:j:i,
@@ -331,7 +330,7 @@ paste(Block,replace)->(
             )
         );
         schedule(1,'_add_to_history');
-        _draw_surf(1);
+        global_draw=false;
         global_sets=[];
         global_cset=[];
         global_points=[]
